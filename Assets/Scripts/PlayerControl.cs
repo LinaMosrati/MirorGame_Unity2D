@@ -30,6 +30,13 @@ public class MirrorMovement : MonoBehaviour
     public SpriteRenderer bottomRenderer;
     public SpriteRenderer topRenderer;
 
+    [Header("Crouch Settings")]
+    public Sprite crouchSprite;  
+public Sprite crouchMoveSprite;    // assign crouch sprite in Inspector
+public float crouchSpeed = 2f;  // slower movement when crouching
+
+private bool isCrouching = false;
+
     [Header("Timing")]
     public float frameDuration = 0.1f; // Jump frame speed
 
@@ -43,56 +50,93 @@ public class MirrorMovement : MonoBehaviour
 
         bottomGround = bottomPlayer.GetComponent<GroundCheck>();
         topGround = topPlayer.GetComponent<GroundCheck>();
+        
     }
 
     void Update()
     {
-        var keyboard = Keyboard.current;
-        if (keyboard == null) return;
+       var keyboard = Keyboard.current;
+if (keyboard == null) return;
 
-        float horizontal = 0f;
+float horizontal = 0f;
 
-        if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
-            horizontal = -1;
-        else if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
-            horizontal = 1;
+// Check crouch
+isCrouching = keyboard.sKey.isPressed || keyboard.downArrowKey.isPressed;
 
-        // Prevent movement if blocked
-        if (bottomBlocked && Mathf.Sign(horizontal) == Mathf.Sign(bottomRb.linearVelocity.x))
-            horizontal = 0;
+// Horizontal input
+if (keyboard.aKey.isPressed || keyboard.leftArrowKey.isPressed)
+    horizontal = -1;
+else if (keyboard.dKey.isPressed || keyboard.rightArrowKey.isPressed)
+    horizontal = 1;
 
-        // Movement
-        bottomRb.linearVelocity = new Vector2(horizontal * moveSpeed, bottomRb.linearVelocity.y);
+// Apply crouch speed if crouching
+float currentSpeed = isCrouching ? crouchSpeed : moveSpeed;
 
-        // Mirror movement
-        if (topBlocked && Mathf.Sign(-horizontal) == Mathf.Sign(topRb.linearVelocity.x))
-            topRb.linearVelocity = new Vector2(0, topRb.linearVelocity.y);
-        else
-            topRb.linearVelocity = new Vector2(-horizontal * moveSpeed, topRb.linearVelocity.y);
+// Prevent movement if blocked
+if (bottomBlocked && Mathf.Sign(horizontal) == Mathf.Sign(bottomRb.linearVelocity.x))
+    horizontal = 0;
 
-        // Jump
-        if (keyboard.spaceKey.wasPressedThisFrame)
-        {
-            bool jumped = false;
+// Movement
+bottomRb.linearVelocity = new Vector2(horizontal * currentSpeed, bottomRb.linearVelocity.y);
 
-            if (bottomGround.isGrounded)
-            {
-                bottomRb.linearVelocity = new Vector2(bottomRb.linearVelocity.x, jumpForce);
-                jumped = true;
-            }
+// Mirror movement
+if (topBlocked && Mathf.Sign(-horizontal) == Mathf.Sign(topRb.linearVelocity.x))
+    topRb.linearVelocity = new Vector2(0, topRb.linearVelocity.y);
+else
+    topRb.linearVelocity = new Vector2(-horizontal * currentSpeed, topRb.linearVelocity.y);
 
-            if (topGround.isGrounded)
-            {
-                topRb.linearVelocity = new Vector2(topRb.linearVelocity.x, jumpForce);
-                jumped = true;
-            }
+// Jump
+if (keyboard.spaceKey.wasPressedThisFrame && !isCrouching)
+{
+    bool jumped = false;
 
-            if (jumped && !isAnimatingJump)
-            {
-                StopCoroutineIfRunning(ref isAnimatingWalk);
-                StartCoroutine(PlayJumpAnimation());
-            }
-        }
+    if (bottomGround.isGrounded)
+    {
+        bottomRb.linearVelocity = new Vector2(bottomRb.linearVelocity.x, jumpForce);
+        jumped = true;
+    }
+
+    if (topGround.isGrounded)
+    {
+        topRb.linearVelocity = new Vector2(topRb.linearVelocity.x, jumpForce);
+        jumped = true;
+    }
+
+    if (jumped && !isAnimatingJump)
+    {
+        StopCoroutineIfRunning(ref isAnimatingWalk);
+        StartCoroutine(PlayJumpAnimation());
+    }
+}
+
+// Handle animations
+if (isCrouching && bottomGround.isGrounded)
+{
+    StopCoroutineIfRunning(ref isAnimatingWalk);
+    StopCoroutineIfRunning(ref isAnimatingJump);
+
+    // If crouching + moving
+    if (Mathf.Abs(horizontal) > 0.1f)
+    {
+        bottomRenderer.sprite = crouchMoveSprite;
+        topRenderer.sprite = crouchMoveSprite;
+    }
+    else
+    {
+        bottomRenderer.sprite = crouchSprite;
+        topRenderer.sprite = crouchSprite;
+    }
+}
+else if (Mathf.Abs(horizontal) > 0.1f && bottomGround.isGrounded && !isAnimatingJump)
+{
+    if (!isAnimatingWalk)
+        StartCoroutine(PlayWalkAnimation());
+}
+else
+{
+    StopCoroutineIfRunning(ref isAnimatingWalk);
+}
+
 
         // Handle walking animation
         if (Mathf.Abs(horizontal) > 0.1f && bottomGround.isGrounded && !isAnimatingJump)
